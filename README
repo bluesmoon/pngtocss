@@ -1,0 +1,10 @@
+pngtocss takes in a png file with a gradient in it and spits out the necessary CSS to
+draw that gradient.  It only works with square pngs with two colour gradients (ie, one
+start and one end) and only linear gradients.  It can handle horizontal, vertical and
+diagonal gradients.
+
+It does not support:
+- radial gradients
+- angular gradients (except for perfect diagonal)
+- more than 2 colours
+- alpha transparency
