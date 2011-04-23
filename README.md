@@ -60,3 +60,7 @@ figured that this was a good opportunity to learn both at once.  I decided to wr
 in C because I hadn't written C code in a very long time.
 
 Patches welcome.
+
+## Things I learnt
+
+*  The average of two colours will be closer to one than to the other.
