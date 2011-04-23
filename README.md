@@ -36,6 +36,18 @@ BSD Licensed
 
 2011 Philip Tellis -- <philip@bluesmoon.info> -- http://bluesmoon.info/
 
+## Credits:
+
+Everything I know about reading a PNG I got from Chapter 13 of the libpng book: 
+http://www.libpng.org/pub/png/book/chapter13.html
+
+The CSS gradient syntax came from these wonderful sites:
+
+*  http://css-tricks.com/css3-gradients/
+*  http://webdesignerwall.com/tutorials/cross-browser-css-gradient
+*  http://hacks.mozilla.org/2009/11/css-gradients-firefox-36/
+*  http://www.tankedup-imaging.com/css_dev/css-gradient.html
+
 ## History:
 
 Nicole tweeted about [the absence of a tool to convert images to gradients](http://twitter.com/stubbornella/status/61499795801505792/):
