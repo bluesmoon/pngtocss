@@ -5,6 +5,8 @@
  * YMMV
  *
  * Copyright 2011 Philip Tellis -- <philip@bluesmoon.info> -- http://bluesmoon.info
+ *
+ * License: BSD
  */
 
 #include <stdio.h>
