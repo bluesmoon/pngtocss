@@ -67,8 +67,13 @@ void version_info()
 	fprintf(stderr, "pngtocss v%s\n", VERSION);
 	fprintf(stderr, "   Compiled with libpng %s; using libpng %s.\n",
 			PNG_LIBPNG_VER_STRING, png_libpng_ver);
-	fprintf(stderr, "   Compiled with zlib %s; using zlib %s.\n",
+	fprintf(stderr, "   Compiled with zlib %s; using zlib %s.\n\n",
 			ZLIB_VERSION, zlib_version);
+}
+
+void usage_info()
+{
+	fprintf(stderr, "Usage: pngtocss <image1.png> <image2.png> ...\n");
 }
 
 enum error check_sig(FILE *f)
@@ -167,13 +172,27 @@ int rgb_equal(rgb a, rgb b)
 	return 0;
 }
 
-void print_css_gradient(box b)
+void print_css_gradient(const char *fname, box b)
 {
 	point start;
 	rgb color1, color2;
 	char *points[] = { "top", "left", "left top", "right top" };
 	char *wk_s_points[] = { "left top", "left top", "left top", "right top" };
 	char *wk_e_points[] = { "left bottom", "right top", "right bottom", "left bottom" };
+	char *classname, *c;
+
+	classname = (char *)malloc(strlen(fname));
+	c=strrchr(fname, '/');
+	if(c)
+		c++;
+	else
+		c=(char *)fname;
+
+	strcpy(classname, c);
+	c=strchr(classname, '.');
+	if(c) {
+		*c='\0';
+	}
 
 	color1=b.tl;
 	color2=b.br;
@@ -193,7 +212,7 @@ void print_css_gradient(box b)
 		color2=b.bl;
 	}
 
-	printf(".gradient {\n");
+	printf(".%s {\n", classname);
 	/* Gecko */
 	printf("\tbackground-image: -moz-linear-gradient(%s, #%02x%02x%02x, #%02x%02x%02x);\n",
 			points[start], color1.r, color1.g, color1.b, color2.r, color2.g, color2.b);
@@ -226,7 +245,7 @@ enum error process_file(const char *fname)
 	fclose(f);
 
 	if(status == OK) {
-		print_css_gradient(b);
+		print_css_gradient(fname, b);
 	}
 
 	return status;
@@ -239,6 +258,7 @@ int main(int argc, char **argv)
 
 	if(argc == 1) {
 		version_info();
+		usage_info();
 		return OK;
 	}
 
