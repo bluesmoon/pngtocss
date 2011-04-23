@@ -13,12 +13,13 @@
 
 #define VERSION "0.1"
 
-enum error {
+typedef enum status {
 	OK = 0,
 	E_NOT_PNG,
 	E_NO_MEM,
-	E_INTERNAL
-};
+	E_INTERNAL,
+	E_NO_FILE
+} status;
 
 typedef enum point {
 	top,
@@ -44,7 +45,7 @@ typedef struct box {
 	rgb br;
 } box;
 
-void print_error(const char *fname, enum error err)
+static void print_error(const char *fname, status err)
 {
 	char *emsg = "";
 
@@ -57,12 +58,16 @@ void print_error(const char *fname, enum error err)
 			break;
 		case E_INTERNAL:
 			emsg = "Problem inside libpng";
+			break;
+		case E_NO_FILE:
+			emsg = "Could not open file";
+			break;
 	}
 
 	fprintf(stderr, "Error with ``%s''; %s\n", fname, emsg);
 }
 
-void version_info()
+static void version_info()
 {
 	fprintf(stderr, "pngtocss v%s\n", VERSION);
 	fprintf(stderr, "   Compiled with libpng %s; using libpng %s.\n",
@@ -71,23 +76,28 @@ void version_info()
 			ZLIB_VERSION, zlib_version);
 }
 
-void usage_info()
+static void usage_info()
 {
 	fprintf(stderr, "Usage: pngtocss <image1.png> <image2.png> ...\n");
 }
 
-enum error check_sig(FILE *f)
+/*
+ * Thanks to this site for information on reading a png:
+ * http://www.libpng.org/pub/png/book/chapter13.html
+ */
+static status check_sig(FILE *f)
 {
 	unsigned char sig[8];
-	fread(sig, 1, 8, f);
-	if(!png_check_sig(sig, 8)) {
+	int n;
+	n = fread(sig, 1, 8, f);
+	if(n < 8 || !png_check_sig(sig, 8)) {
 		return E_NOT_PNG;
 	}
 
 	return OK;
 }
 
-enum error read_png(FILE *f, box *out)
+static status read_png(FILE *f, box *out)
 {
 	png_structp png_ptr;
 	png_infop info_ptr;
@@ -164,7 +174,7 @@ enum error read_png(FILE *f, box *out)
 	return OK;
 }
 
-int rgb_equal(rgb a, rgb b)
+static int rgb_equal(rgb a, rgb b)
 {
 	if(a.r == b.r && a.g == b.g && a.b == b.b) {
 		return 1;
@@ -172,7 +182,14 @@ int rgb_equal(rgb a, rgb b)
 	return 0;
 }
 
-void print_css_gradient(const char *fname, box b)
+/*
+ * Thanks to the following pages for info about this function:
+ * http://css-tricks.com/css3-gradients/
+ * http://webdesignerwall.com/tutorials/cross-browser-css-gradient
+ * http://hacks.mozilla.org/2009/11/css-gradients-firefox-36/
+ * http://www.tankedup-imaging.com/css_dev/css-gradient.html
+ */
+static void print_css_gradient(const char *fname, box b)
 {
 	point start;
 	rgb color1, color2;
@@ -229,32 +246,35 @@ void print_css_gradient(const char *fname, box b)
 
 }
 
-enum error process_file(const char *fname)
+static status process_file(const char *fname)
 {
 	FILE *f;
-	enum error status=OK;
+	status stat=OK;
 	box b;
 
-	f = fopen(fname, "r");
-	status = check_sig(f);
+	f = fopen(fname, "rb");
+	if(!f) {
+		return E_NO_FILE;
+	}
+	stat = check_sig(f);
 
-	if(status == OK) {
-		status = read_png(f, &b);
+	if(stat == OK) {
+		stat = read_png(f, &b);
 	}
 
 	fclose(f);
 
-	if(status == OK) {
+	if(stat == OK) {
 		print_css_gradient(fname, b);
 	}
 
-	return status;
+	return stat;
 }
 
 int main(int argc, char **argv)
 {
 	int i=1;
-	enum error err=OK;
+	status err=OK;
 
 	if(argc == 1) {
 		version_info();
