@@ -8,3 +8,17 @@ It does not support:
 - angular gradients (except for perfect diagonal)
 - more than 2 colours
 - alpha transparency
+
+See the examples/ directory for all the pngs that I've tested this with.  Feel free
+to submit your own (keep them small).
+
+See the src/ directory for the source code.
+
+It's written in C, and uses libpng and zlib.  You'll need both of those to compile it.
+Also, I wrote it on MacOSX, so I installed the libraries using ports.  You may need to
+play with the Makefile if you're using a different OS.  Sorry, I don't have the time 
+to test, but if you submit a pull request, I'll merge it.
+
+License: BSD Licensed
+
+Copyright: 2011 Philip Tellis -- <philip@bluesmoon.info> -- http://bluesmoon.info/
