@@ -38,7 +38,7 @@ BSD Licensed
 
 ## History:
 
-Nicole tweeted about [the absence of a tool to convert images to gradients](http://twitter.com/#!/stubbornella/status/61499795801505792/):
+Nicole tweeted about [the absence of a tool to convert images to gradients](http://twitter.com/stubbornella/status/61499795801505792/):
 
 ![Screenshot of Nicole's tweet](https://img.skitch.com/20110423-dh9axwes4t8d8srfcsw1n774i4.png)
 
