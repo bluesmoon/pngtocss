@@ -15,15 +15,16 @@
 
 #define VERSION "0.1"
 
-typedef enum status {
+typedef enum {
 	OK = 0,
 	E_NOT_PNG,
 	E_NO_MEM,
 	E_INTERNAL,
-	E_NO_FILE
+	E_NO_FILE,
+	E_NOT_SUPPORTED
 } status;
 
-typedef enum point {
+typedef enum {
 	top,
 	left,
 	top_left,
@@ -34,18 +35,18 @@ typedef enum point {
 	bottom_right
 } point;
 
-typedef struct rgb {
-	unsigned char r;
-	unsigned char g;
-	unsigned char b;
+/* We use int to avoid overflow when averaging */
+typedef struct {
+	int r;
+	int g;
+	int b;
 } rgb;
 
-typedef struct box {
-	rgb tl;
-	rgb tr;
-	rgb bl;
-	rgb br;
-} box;
+typedef struct {
+	point start;
+	int ncolors;
+	rgb *colors;
+} gradient;
 
 static void print_error(const char *fname, status err)
 {
@@ -63,6 +64,9 @@ static void print_error(const char *fname, status err)
 			break;
 		case E_NO_FILE:
 			emsg = "Could not open file";
+			break;
+		case E_NOT_SUPPORTED:
+			emsg = "Gradient type not supported";
 			break;
 	}
 
@@ -86,6 +90,107 @@ static void usage_info()
 	fprintf(stderr, "Usage: pngtocss <image1.png> <image2.png> ...\n");
 }
 
+static rgb byte2rgb(png_bytep triad)
+{
+	rgb c;
+
+	c.r = triad[0];
+	c.g = triad[1];
+	c.b = triad[2];
+
+	return c;
+}
+
+static rgb rgb_avg(rgb a, rgb b)
+{
+	rgb c;
+
+	c.r = (a.r+b.r)/2;
+	c.g = (a.g+b.g)/2;
+	c.b = (a.b+b.b)/2;
+
+	return c;
+}
+
+static int rgb_equal(rgb a, rgb b)
+{
+	/* Match with a tolerance of 1 */
+	if((a.r == b.r || a.r == b.r+1 || a.r == b.r-1)
+	&& (a.g == b.g || a.g == b.g+1 || a.g == b.g-1)
+       	&& (a.b == b.b || a.b == b.b+1 || a.b == b.b-1)) {
+		return 1;
+	}
+	return 0;
+}
+
+static void print_rgb(rgb c)
+{
+	printf("#%02x%02x%02x, ", c.r, c.g, c.b);
+}
+
+static void calculate_gradient(png_uint_32 height, png_uint_32 width, png_bytep *row_pointers, gradient *g)
+{
+	rgb tl, tr, bl, br, mid;
+	png_uint_32 i, l;
+
+	tl = byte2rgb(row_pointers[0]);
+	tr = byte2rgb(row_pointers[0] + (width-1)*3);
+	bl = byte2rgb(row_pointers[height-1]);
+	br = byte2rgb(row_pointers[height-1] + (width-1)*3);
+
+	if(rgb_equal(tl, tr)) {
+		g->start = top;
+		l=height;
+		if(height % 2 == 1) {
+			mid = byte2rgb(row_pointers[height/2]);
+		}
+		else {
+			mid = rgb_avg(byte2rgb(row_pointers[height/2]), byte2rgb(row_pointers[height/2-1]));
+		}
+	}
+	else if(rgb_equal(tl, bl)) {
+		g->start = left;
+		l=width;
+		if(width % 2 == 1) {
+			mid = byte2rgb(row_pointers[0] + (width/2)*3);
+		}
+		else {
+			mid = rgb_avg(byte2rgb(row_pointers[0] + (width/2)*3), byte2rgb(row_pointers[0] + (width/2-1)*3));
+		}
+	}
+	else if(rgb_equal(tr, bl) && !rgb_equal(tl, br)) {
+		g->start = top_left;
+		l=height;
+	}
+	else if(rgb_equal(tl, br) && !rgb_equal(tr, bl)) {
+		g->start = top_right;
+		l=height;
+		tl = tr;
+		br = bl;
+	}
+
+	g->colors = NULL;
+	g->ncolors = 0;
+
+	/* If it's a diagonal, we only support 2 colours */
+	/* If it's horizontal or vertical and the middle colour is the avg of the ends, then
+	 * we only need two colours */
+	if(g->start == top_left || g->start == top_right
+		|| rgb_equal(mid, rgb_avg(tl, br))) {
+
+		g->colors = (rgb *)malloc(sizeof(rgb)*2);
+		g->colors[0] = tl;
+		g->colors[1] = br;
+		g->ncolors = 2;
+
+		return;
+	}
+
+	/* Now we come to the complicated part where there are more than 2 colours */
+	/* The good thing though is that it's either horizontal or vertical at this point */
+}
+
+
 /*
  * Thanks to this site for information on reading a png:
  * http://www.libpng.org/pub/png/book/chapter13.html
@@ -102,7 +207,7 @@ static status check_sig(FILE *f)
 	return OK;
 }
 
-static status read_png(FILE *f, box *out)
+static status read_png(FILE *f, gradient *g)
 {
 	png_structp png_ptr;
 	png_infop info_ptr;
@@ -154,37 +259,18 @@ static status read_png(FILE *f, box *out)
 	}
 
 	png_read_image(png_ptr, row_pointers);
-
-	out->tl.r = image_data[0];
-	out->tl.g = image_data[1];
-	out->tl.b = image_data[2];
-
-	out->tr.r = image_data[rowbytes-3];
-	out->tr.g = image_data[rowbytes-2];
-	out->tr.b = image_data[rowbytes-1];
-
-	out->bl.r = row_pointers[height-1][0];
-	out->bl.g = row_pointers[height-1][1];
-	out->bl.b = row_pointers[height-1][2];
-
-	out->br.r = row_pointers[height-1][rowbytes-3];
-	out->br.g = row_pointers[height-1][rowbytes-2];
-	out->br.b = row_pointers[height-1][rowbytes-1];
-
 	png_read_end(png_ptr, NULL);
+
+	calculate_gradient(height, width, row_pointers, g);
 
 	free(image_data);
 	free(row_pointers);
 
-	return OK;
-}
-
-static int rgb_equal(rgb a, rgb b)
-{
-	if(a.r == b.r && a.g == b.g && a.b == b.b) {
-		return 1;
+	if(g->ncolors == 0) {
+		return E_NOT_SUPPORTED;
 	}
-	return 0;
+
+	return OK;
 }
 
 /*
@@ -194,14 +280,16 @@ static int rgb_equal(rgb a, rgb b)
  * http://hacks.mozilla.org/2009/11/css-gradients-firefox-36/
  * http://www.tankedup-imaging.com/css_dev/css-gradient.html
  */
-static void print_css_gradient(const char *fname, box b)
+static void print_css_gradient(const char *fname, gradient g)
 {
-	point start;
-	rgb color1, color2;
 	char *points[] = { "top", "left", "left top", "right top" };
 	char *wk_s_points[] = { "left top", "left top", "left top", "right top" };
 	char *wk_e_points[] = { "left bottom", "right top", "right bottom", "left bottom" };
 	char *classname, *c;
+
+	if(g.ncolors == 0) {
+		return;
+	}
 
 	classname = (char *)malloc(strlen(fname));
 	c=strrchr(fname, '/');
@@ -216,46 +304,32 @@ static void print_css_gradient(const char *fname, box b)
 		*c='\0';
 	}
 
-	color1=b.tl;
-	color2=b.br;
-
-	if(rgb_equal(b.tl, b.tr)) {
-		start = top;
-	}
-	else if(rgb_equal(b.tl, b.bl)) {
-		start = left;
-	}
-	else if(rgb_equal(b.tr, b.bl) && !rgb_equal(b.tl, b.br)) {
-		start = top_left;
-	}
-	else if(rgb_equal(b.tl, b.br) && !rgb_equal(b.tr, b.bl)) {
-		start = top_right;
-		color1=b.tr;
-		color2=b.bl;
-	}
-
 	printf(".%s {\n", classname);
 	/* Gecko */
 	printf("\tbackground-image: -moz-linear-gradient(%s, #%02x%02x%02x, #%02x%02x%02x);\n",
-			points[start], color1.r, color1.g, color1.b, color2.r, color2.g, color2.b);
+			points[g.start], g.colors[0].r, g.colors[0].g, g.colors[0].b, g.colors[1].r, g.colors[1].g, g.colors[1].b);
 	/* Safari 4+, Chrome 1+ */
 	printf("\tbackground-image: -webkit-gradient(linear, %s, %s, from(#%02x%02x%02x), to(#%02x%02x%02x));\n",
-			wk_s_points[start], wk_e_points[start], color1.r, color1.g, color1.b, color2.r, color2.g, color2.b);
+			wk_s_points[g.start], wk_e_points[g.start], g.colors[0].r, g.colors[0].g, g.colors[0].b, g.colors[1].r, g.colors[1].g, g.colors[1].b);
 	/* Safari 5.1+, Chrome 10+ */
 	printf("\tbackground-image: -webkit-linear-gradient(%s, #%02x%02x%02x, #%02x%02x%02x);\n",
-			points[start], color1.r, color1.g, color1.b, color2.r, color2.g, color2.b);
+			points[g.start], g.colors[0].r, g.colors[0].g, g.colors[0].b, g.colors[1].r, g.colors[1].g, g.colors[1].b);
 	/* Opera */
 	printf("\tbackground-image: -o-linear-gradient(%s, #%02x%02x%02x, #%02x%02x%02x);\n",
-			points[start], color1.r, color1.g, color1.b, color2.r, color2.g, color2.b);
+			points[g.start], g.colors[0].r, g.colors[0].g, g.colors[0].b, g.colors[1].r, g.colors[1].g, g.colors[1].b);
 	printf("}\n");
 
+
+	free(classname);
+	free(g.colors);
+	g.colors=NULL;
 }
 
 static status process_file(const char *fname)
 {
 	FILE *f;
 	status stat=OK;
-	box b;
+	gradient g;
 
 	f = fopen(fname, "rb");
 	if(!f) {
@@ -264,13 +338,13 @@ static status process_file(const char *fname)
 	stat = check_sig(f);
 
 	if(stat == OK) {
-		stat = read_png(f, &b);
+		stat = read_png(f, &g);
 	}
 
 	fclose(f);
 
 	if(stat == OK) {
-		print_css_gradient(fname, b);
+		print_css_gradient(fname, g);
 	}
 
 	return stat;
