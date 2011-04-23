@@ -4,10 +4,11 @@ start and one end) and only linear gradients.  It can handle horizontal, vertica
 diagonal gradients.
 
 It does not support:
-- radial gradients
-- angular gradients (except for perfect diagonal)
-- more than 2 colours
-- alpha transparency
+
+*  radial gradients
+*  angular gradients (except for perfect diagonal)
+*  more than 2 colours
+*  alpha transparency
 
 See the examples/ directory for all the pngs that I've tested this with.  Feel free
 to submit your own (keep them small).
