@@ -22,3 +22,15 @@ to test, but if you submit a pull request, I'll merge it.
 License: BSD Licensed
 
 Copyright: 2011 Philip Tellis -- <philip@bluesmoon.info> -- http://bluesmoon.info/
+
+History:
+
+Nicole tweeted about <a href="http://twitter.com/#!/stubbornella/status/61499795801505792">the absence of a tool to convert images to gradients</a>:
+
+<img src="https://img.skitch.com/20110423-dh9axwes4t8d8srfcsw1n774i4.png" alt="Screenshot of Nicole's tweet">
+
+I realised that I knew neither what CSS gradients were, nor how to read a PNG file, so
+figured that this was a good opportunity to learn both at once.  I decided to write it
+in C because I hadn't written C code in a very long time.
+
+Patches welcome.
