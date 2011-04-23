@@ -3,6 +3,7 @@ draw that gradient.
 
 ## It only works with:
 
+*  24 bit PNGs
 *  square pngs with two colour gradients (ie, one start and one end)
 *  only linear gradients
 *  horizontal gradients
