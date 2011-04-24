@@ -65,8 +65,3 @@ Patches welcome.
 
 *  The average of two colours will be closer to one than to the other.
 
-## Discussion
-
-<script>
-document.title="testing";
-</script>
