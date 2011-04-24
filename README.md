@@ -65,3 +65,6 @@ Patches welcome.
 
 *  The average of two colours will be closer to one than to the other.
 
+## Discussion
+
+Talk about pngtocss on the [discussion page](http://bluesmoon.github.com/pngtocss/)
