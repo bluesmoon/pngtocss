@@ -4,17 +4,17 @@ draw that gradient.
 ## It only works with:
 
 *  24 bit PNGs
-*  square pngs with two colour gradients (ie, one start and one end)
 *  only linear gradients
 *  horizontal gradients
 *  vertical gradients
 *  diagonal gradients
+*  multi-colour support only for horizontal and vertical
 
 ## It does not support:
 
 *  radial gradients
 *  angular gradients (except for perfect diagonal)
-*  more than 2 colours
+*  more than 2 colours on diagonal gradients
 *  alpha transparency
 
 ## Code
