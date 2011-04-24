@@ -400,7 +400,7 @@ static void print_css_gradient(const char *fname, gradient g)
 		return;
 	}
 
-	classname = (char *)malloc(strlen(fname));
+	classname = (char *)calloc(strlen(fname)+1, 1);
 	c=strrchr(fname, '/');
 	if(c)
 		c++;
