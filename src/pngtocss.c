@@ -35,6 +35,13 @@ typedef enum {
 	bottom_right
 } point;
 
+typedef struct {
+	unsigned char *data;
+	png_uint_32 height;
+	png_uint_32 width;
+	png_bytep *row_pointers;
+} bmp;
+
 /* We use int to avoid overflow when averaging */
 typedef struct {
 	int r;
@@ -101,6 +108,11 @@ static rgb byte2rgb(png_bytep triad)
 	return c;
 }
 
+static rgb getpixel(const bmp *image, png_uint_32 x, png_uint_32 y)
+{
+	return byte2rgb(image->data + (y*image->width*3) + x*3);
+}
+
 static rgb rgb_avg(rgb a, rgb b)
 {
 	rgb c;
@@ -128,43 +140,43 @@ static void print_rgb(rgb c)
 	printf("#%02x%02x%02x, ", c.r, c.g, c.b);
 }
 
-static void calculate_gradient(png_uint_32 height, png_uint_32 width, png_bytep *row_pointers, gradient *g)
+static void calculate_gradient(const bmp *image, gradient *g)
 {
 	rgb tl, tr, bl, br, mid;
 	png_uint_32 i, l;
 
-	tl = byte2rgb(row_pointers[0]);
-	tr = byte2rgb(row_pointers[0] + (width-1)*3);
-	bl = byte2rgb(row_pointers[height-1]);
-	br = byte2rgb(row_pointers[height-1] + (width-1)*3);
+	tl = getpixel(image, 0, 0);
+	tr = getpixel(image, 0, image->width-1);
+	bl = getpixel(image, image->height-1, 0);
+	br = getpixel(image, image->height-1, image->width-1);
 
 	if(rgb_equal(tl, tr)) {
 		g->start = top;
-		l=height;
-		if(height % 2 == 1) {
-			mid = byte2rgb(row_pointers[height/2]);
+		l=image->height;
+		if(l % 2 == 1) {
+			mid = getpixel(image, l/2, 0);
 		}
 		else {
-			mid = rgb_avg(byte2rgb(row_pointers[height/2]), byte2rgb(row_pointers[height/2-1]));
+			mid = rgb_avg(getpixel(image, l/2, 0), getpixel(image, l/2-1, 0));
 		}
 	}
 	else if(rgb_equal(tl, bl)) {
 		g->start = left;
-		l=width;
-		if(width % 2 == 1) {
-			mid = byte2rgb(row_pointers[0] + (width/2)*3);
+		l=image->width;
+		if(l % 2 == 1) {
+			mid = getpixel(image, 0, l/2);
 		}
 		else {
-			mid = rgb_avg(byte2rgb(row_pointers[0] + (width/2)*3), byte2rgb(row_pointers[0] + (width/2-1)*3));
+			mid = rgb_avg(getpixel(image, 0, l/2), getpixel(image, 0, l/2-1));
 		}
 	}
 	else if(rgb_equal(tr, bl) && !rgb_equal(tl, br)) {
 		g->start = top_left;
-		l=height;
+		l=image->height;
 	}
 	else if(rgb_equal(tl, br) && !rgb_equal(tr, bl)) {
 		g->start = top_right;
-		l=height;
+		l=image->height;
 		tl = tr;
 		br = bl;
 	}
@@ -188,6 +200,8 @@ static void calculate_gradient(png_uint_32 height, png_uint_32 width, png_bytep 
 
 	/* Now we come to the complicated part where there are more than 2 colours */
 	/* The good thing though is that it's either horizontal or vertical at this point */
+
+
 }
 
 
@@ -211,11 +225,9 @@ static status read_png(FILE *f, gradient *g)
 {
 	png_structp png_ptr;
 	png_infop info_ptr;
-	png_uint_32 width, height;
 	int bit_depth, color_type, i;
 	png_uint_32 rowbytes;
-	png_bytep *row_pointers;
-	unsigned char *image_data;
+	bmp image;
 
 	png_ptr = png_create_read_struct(PNG_LIBPNG_VER_STRING, NULL, NULL, NULL);
 
@@ -239,32 +251,32 @@ static status read_png(FILE *f, gradient *g)
 	png_set_sig_bytes(png_ptr, 8);
 	png_read_info(png_ptr, info_ptr);
 
-	png_get_IHDR(png_ptr, info_ptr, &width, &height, &bit_depth, &color_type, NULL, NULL, NULL);
+	png_get_IHDR(png_ptr, info_ptr, &image.width, &image.height, &bit_depth, &color_type, NULL, NULL, NULL);
 
-	if( (row_pointers = (png_bytep *)malloc(sizeof(png_bytep) * height)) == NULL) {
+	if( (image.row_pointers = (png_bytep *)malloc(sizeof(png_bytep) * image.height)) == NULL) {
 		png_destroy_read_struct(&png_ptr, NULL, NULL);
 		return E_NO_MEM;
 	}
 
 	rowbytes = png_get_rowbytes(png_ptr, info_ptr);
 
-	if( (image_data = (unsigned char *)malloc(rowbytes * height)) == NULL) {
+	if( (image.data = (unsigned char *)malloc(rowbytes * image.height)) == NULL) {
 		png_destroy_read_struct(&png_ptr, NULL, NULL);
-		free(row_pointers);
+		free(image.row_pointers);
 		return E_NO_MEM;
 	}
 
-	for(i=0; i<height; i++) {
-		row_pointers[i] = image_data + i*rowbytes;
+	for(i=0; i<image.height; i++) {
+		image.row_pointers[i] = image.data + i*rowbytes;
 	}
 
-	png_read_image(png_ptr, row_pointers);
+	png_read_image(png_ptr, image.row_pointers);
 	png_read_end(png_ptr, NULL);
 
-	calculate_gradient(height, width, row_pointers, g);
+	calculate_gradient(&image, g);
 
-	free(image_data);
-	free(row_pointers);
+	free(image.data);
+	free(image.row_pointers);
 
 	if(g->ncolors == 0) {
 		return E_NOT_SUPPORTED;
