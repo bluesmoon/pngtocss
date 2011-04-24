@@ -414,6 +414,7 @@ static void print_css_gradient(const char *fname, gradient g)
 	}
 
 	printf(".%s {\n", classname);
+
 	/* Gecko */
 	printf("\tbackground-image: -moz-linear-gradient(%s, ", points[g.start]);
 	print_colors(&g, 0);
@@ -430,8 +431,12 @@ static void print_css_gradient(const char *fname, gradient g)
 	printf("\tbackground-image: -o-linear-gradient(%s, ", points[g.start]);
 	print_colors(&g, 0);
 	printf(");\n");
-	printf("}\n");
+	/* Unprefixed */
+	printf("\tbackground-image: linear-gradient(%s, ", points[g.start]);
+	print_colors(&g, 0);
+	printf(");\n");
 
+	printf("}\n");
 
 	free(classname);
 	free(g.colors);
@@ -482,4 +487,3 @@ int main(int argc, char **argv)
 
 	return err;
 }
-
