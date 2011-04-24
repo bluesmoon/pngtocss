@@ -25,12 +25,12 @@ typedef enum {
 } status;
 
 typedef enum {
-	top,
 	left,
+	top,
 	top_left,
 	top_right,
-	bottom,
 	right,
+	bottom,
 	bottom_left,
 	bottom_right
 } point;
@@ -39,6 +39,7 @@ typedef struct {
 	unsigned char *data;
 	png_uint_32 height;
 	png_uint_32 width;
+	int pxbytes;
 	png_bytep *row_pointers;
 } bmp;
 
@@ -47,6 +48,7 @@ typedef struct {
 	int r;
 	int g;
 	int b;
+	int pos;
 } rgb;
 
 typedef struct {
@@ -105,12 +107,14 @@ static rgb byte2rgb(png_bytep triad)
 	c.g = triad[1];
 	c.b = triad[2];
 
+	c.pos = -1;
+
 	return c;
 }
 
 static rgb getpixel(const bmp *image, png_uint_32 x, png_uint_32 y)
 {
-	return byte2rgb(image->data + (y*image->width*3) + x*3);
+	return byte2rgb(image->data + (y*image->width*image->pxbytes) + x*image->pxbytes);
 }
 
 static rgb rgb_avg(rgb a, rgb b)
@@ -126,10 +130,10 @@ static rgb rgb_avg(rgb a, rgb b)
 
 static int rgb_equal(rgb a, rgb b)
 {
-	/* Match with a tolerance of 1 */
-	if((a.r == b.r || a.r == b.r+1 || a.r == b.r-1)
-	&& (a.g == b.g || a.g == b.g+1 || a.g == b.g-1)
-       	&& (a.b == b.b || a.b == b.b+1 || a.b == b.b-1)) {
+	/* Match with a tolerance of 2 */
+	if(a.r <= b.r+2 && a.r >= b.r-2
+	&& a.g <= b.g+2 && a.g >= b.g-2
+       	&& a.b <= b.b+2 && a.b >= b.b-2) {
 		return 1;
 	}
 	return 0;
@@ -137,37 +141,62 @@ static int rgb_equal(rgb a, rgb b)
 
 static void print_rgb(rgb c)
 {
-	printf("#%02x%02x%02x, ", c.r, c.g, c.b);
+	printf("#%02x%02x%02x", c.r, c.g, c.b);
+	if(c.pos != -1)
+		printf(" %u%%", c.pos);
+}
+
+static void print_colors(gradient *g, int old_webkit)
+{
+	int i;
+	if(old_webkit) {
+		printf("from(#%02x%02x%02x), to(#%02x%02x%02x)",
+				g->colors[0].r, g->colors[0].g, g->colors[0].b,
+				g->colors[g->ncolors-1].r, g->colors[g->ncolors-1].g, g->colors[g->ncolors-1].b);
+		for(i=1; i<g->ncolors-1; i++) {
+			printf(", color-stop(%u%%, #%02x%02x%02x)",
+				g->colors[i].pos,
+				g->colors[i].r, g->colors[i].g, g->colors[i].b);
+		}
+	}
+	else {
+		print_rgb(g->colors[0]);
+		for(i=1; i<g->ncolors; i++) {
+			printf(", ");
+			print_rgb(g->colors[i]);
+		}
+	}
 }
 
 static void calculate_gradient(const bmp *image, gradient *g)
 {
-	rgb tl, tr, bl, br, mid;
-	png_uint_32 i, l;
+	rgb tl, tr, bl, br, mid, avg;
+	png_uint_32 i, l, base, min, max;
+	png_uint_32 xy[2][2] = {{0, 0},{0, 0}};
 
 	tl = getpixel(image, 0, 0);
-	tr = getpixel(image, 0, image->width-1);
-	bl = getpixel(image, image->height-1, 0);
-	br = getpixel(image, image->height-1, image->width-1);
+	tr = getpixel(image, image->width-1, 0);
+	bl = getpixel(image, 0, image->height-1);
+	br = getpixel(image, image->width-1, image->height-1);
 
 	if(rgb_equal(tl, tr)) {
 		g->start = top;
 		l=image->height;
 		if(l % 2 == 1) {
-			mid = getpixel(image, l/2, 0);
+			mid = getpixel(image, 0, l/2);
 		}
 		else {
-			mid = rgb_avg(getpixel(image, l/2, 0), getpixel(image, l/2-1, 0));
+			mid = rgb_avg(getpixel(image, 0, l/2), getpixel(image, 0, l/2-1));
 		}
 	}
 	else if(rgb_equal(tl, bl)) {
 		g->start = left;
 		l=image->width;
 		if(l % 2 == 1) {
-			mid = getpixel(image, 0, l/2);
+			mid = getpixel(image, l/2, 0);
 		}
 		else {
-			mid = rgb_avg(getpixel(image, 0, l/2), getpixel(image, 0, l/2-1));
+			mid = rgb_avg(getpixel(image, l/2, 0), getpixel(image, l/2-1, 0));
 		}
 	}
 	else if(rgb_equal(tr, bl) && !rgb_equal(tl, br)) {
@@ -181,27 +210,92 @@ static void calculate_gradient(const bmp *image, gradient *g)
 		br = bl;
 	}
 
-	g->colors = NULL;
-	g->ncolors = 0;
+	g->colors = (rgb *)calloc(2, sizeof(rgb));
+	g->colors[0] = tl;
+	g->colors[1] = br;
+	g->ncolors = 2;
 
 	/* If it's a diagonal, we only support 2 colours */
 	/* If it's horizontal or vertical and the middle colour is the avg of the ends, then
 	 * we only need two colours */
-	if(g->start == top_left || g->start == top_right
+	/* Also, if the image is less than 3 pixels in the direction of the gradient, then you
+	 * really cannot have more than 2 colours */
+	if(g->start == top_left || g->start == top_right || l < 3
 		|| rgb_equal(mid, rgb_avg(tl, br))) {
-
-		g->colors = (rgb *)malloc(sizeof(rgb)*2);
-		g->colors[0] = tl;
-		g->colors[1] = br;
-		g->ncolors = 2;
 
 		return;
 	}
 
-	/* Now we come to the complicated part where there are more than 2 colours */
-	/* The good thing though is that it's either horizontal or vertical at this point */
+	/* Now we come to the complicated part where there are more than 2 colours 
+	 * The good thing though is that it's either horizontal or vertical at this point
+	 * and that it is at least 3 pixels long in the direction of the gradient
+	 *
+	 * So this is what we'll do.
+	 * - take a slice of the image from the top (or left) and see if the mid pixel matches
+	 *   the average of the two ends.  we start at 3 pixels.
+	 * - if it does, then double the size of the slice and retry (until you reach the end of the image)
+	 * - if it does not match, then reduce until it does match this is the first stop
+	 */
+
+	min = base = 0;
+	xy[0][g->start] = base;
+	max = i = 2;
+	while(i+base<l) {
+		xy[1][g->start] = i+base;
+		avg = rgb_avg(getpixel(image, xy[0][0], xy[0][1]), getpixel(image, xy[1][0], xy[1][1]));
+		if((i+base) % 2 == 0) {
+			mid = getpixel(image, (xy[1][0]+xy[0][0])/2, (xy[1][1]+xy[0][1])/2);
+		}
+		else {
+			mid = rgb_avg(
+					getpixel(image, (xy[1][0]+xy[0][0])/2, (xy[1][1]+xy[0][1])/2),
+					getpixel(image, (xy[1][0]+xy[0][0])/2+1, (xy[1][1]+xy[0][1])/2+1)
+				     );
+		}
 
 
+		if(!rgb_equal(avg, mid)) {
+			if(min == max) {
+				min++;
+				max=i=min+2;
+			}
+			else {
+				max = i;
+				i = (i+min)/2;
+			}
+		}
+		else if(max-i<=1 && i-min<=1) {
+			/* We've converged */
+			if(base+i >= l-1) {
+				/* This is the same as the end point, so skip */
+				i++;
+			}
+			else {
+				g->ncolors++;
+				g->colors = (rgb *)realloc(g->colors, sizeof(rgb)*g->ncolors);
+				g->colors[g->ncolors-2] = getpixel(image, xy[1][0], xy[1][1]);
+				g->colors[g->ncolors-2].pos = (i+base)*100/l;
+
+				base += i;
+				min = 0;
+				max = i = l-base-1;
+				xy[0][g->start] = base;
+			}
+		}
+		else {
+			min = i;
+			if(i == max) {
+				i*=2;
+				if(i+base >= l)
+					i = l-base-1;
+				max = i;
+			}
+			else {
+				i = (i+max)/2;
+			}
+		}
+	}
+	g->colors[g->ncolors-1] = br;
 }
 
 
@@ -260,6 +354,8 @@ static status read_png(FILE *f, gradient *g)
 
 	rowbytes = png_get_rowbytes(png_ptr, info_ptr);
 
+	image.pxbytes = rowbytes/image.width;
+
 	if( (image.data = (unsigned char *)malloc(rowbytes * image.height)) == NULL) {
 		png_destroy_read_struct(&png_ptr, NULL, NULL);
 		free(image.row_pointers);
@@ -294,10 +390,11 @@ static status read_png(FILE *f, gradient *g)
  */
 static void print_css_gradient(const char *fname, gradient g)
 {
-	char *points[] = { "top", "left", "left top", "right top" };
+	char *points[] = { "left", "top", "left top", "right top" };
 	char *wk_s_points[] = { "left top", "left top", "left top", "right top" };
-	char *wk_e_points[] = { "left bottom", "right top", "right bottom", "left bottom" };
+	char *wk_e_points[] = { "right top", "left bottom", "right bottom", "left bottom" };
 	char *classname, *c;
+	int i;
 
 	if(g.ncolors == 0) {
 		return;
@@ -318,17 +415,21 @@ static void print_css_gradient(const char *fname, gradient g)
 
 	printf(".%s {\n", classname);
 	/* Gecko */
-	printf("\tbackground-image: -moz-linear-gradient(%s, #%02x%02x%02x, #%02x%02x%02x);\n",
-			points[g.start], g.colors[0].r, g.colors[0].g, g.colors[0].b, g.colors[1].r, g.colors[1].g, g.colors[1].b);
+	printf("\tbackground-image: -moz-linear-gradient(%s, ", points[g.start]);
+	print_colors(&g, 0);
+	printf(");\n");
 	/* Safari 4+, Chrome 1+ */
-	printf("\tbackground-image: -webkit-gradient(linear, %s, %s, from(#%02x%02x%02x), to(#%02x%02x%02x));\n",
-			wk_s_points[g.start], wk_e_points[g.start], g.colors[0].r, g.colors[0].g, g.colors[0].b, g.colors[1].r, g.colors[1].g, g.colors[1].b);
+	printf("\tbackground-image: -webkit-gradient(linear, %s, %s, ", wk_s_points[g.start], wk_e_points[g.start]);
+	print_colors(&g, 1);
+	printf(");\n");
 	/* Safari 5.1+, Chrome 10+ */
-	printf("\tbackground-image: -webkit-linear-gradient(%s, #%02x%02x%02x, #%02x%02x%02x);\n",
-			points[g.start], g.colors[0].r, g.colors[0].g, g.colors[0].b, g.colors[1].r, g.colors[1].g, g.colors[1].b);
+	printf("\tbackground-image: -webkit-linear-gradient(%s, ", points[g.start]);
+	print_colors(&g, 0);
+	printf(");\n");
 	/* Opera */
-	printf("\tbackground-image: -o-linear-gradient(%s, #%02x%02x%02x, #%02x%02x%02x);\n",
-			points[g.start], g.colors[0].r, g.colors[0].g, g.colors[0].b, g.colors[1].r, g.colors[1].g, g.colors[1].b);
+	printf("\tbackground-image: -o-linear-gradient(%s, ", points[g.start]);
+	print_colors(&g, 0);
+	printf(");\n");
 	printf("}\n");
 
 
