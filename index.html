@@ -7,7 +7,18 @@
 
 <link rel="shortcut icon" href="http://i1.bluesmoon.info/favicon.ico" type="image/x-icon">
 <style type="text/css">
-body { font-family: sans-serif; }
+body {
+	font-family: sans-serif; margin: 0.5in 1in; 
+	background-image: -moz-linear-gradient(left, #ade, #eee 20%);
+	background-image: -webkit-gradient(linear, left top, right top, from(#ade), to(#eee), color-stop(20%, #eee));
+	background-image: -webkit-linear-gradient(left, #ade, #eee 20%);
+	background-image: -o-linear-gradient(left, #ade, #eee 20%);
+}
+h2 { border-top: solid 2px #888; padding-top: 0.5em; }
+
+@media screen and (max-width: 1024px) {
+	body { margin: 1em; }
+}
 </style>
 </head>
 <body>
