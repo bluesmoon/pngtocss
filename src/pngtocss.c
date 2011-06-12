@@ -336,7 +336,11 @@ static status read_png(FILE *f, gradient *g)
 	}
 
 	/* TODO Figure out how to do this without setjmp */
+#if (PNG_LIBPNG_VER < 10500)
 	if (setjmp(png_ptr->jmpbuf)) {
+#else
+	if (setjmp(png_jmpbuf(png_ptr))) {
+#endif
 		png_destroy_read_struct(&png_ptr, &info_ptr, NULL);
 		return E_INTERNAL;
 	}
