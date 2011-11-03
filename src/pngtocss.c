@@ -25,6 +25,12 @@ typedef enum {
 } status;
 
 typedef enum {
+	CSS3 = 0,
+	WEBKIT = 1,
+	YUI3 = 2
+} modes;
+
+typedef enum {
 	left,
 	top,
 	top_left,
@@ -142,14 +148,12 @@ static int rgb_equal(rgb a, rgb b)
 static void print_rgb(rgb c)
 {
 	printf("#%02x%02x%02x", c.r, c.g, c.b);
-	if(c.pos != -1)
-		printf(" %u%%", c.pos);
 }
 
-static void print_colors(gradient *g, int old_webkit)
+static void print_colors(gradient *g, modes mode)
 {
 	int i;
-	if(old_webkit) {
+	if(mode == WEBKIT) {
 		printf("from(#%02x%02x%02x), to(#%02x%02x%02x)",
 				g->colors[0].r, g->colors[0].g, g->colors[0].b,
 				g->colors[g->ncolors-1].r, g->colors[g->ncolors-1].g, g->colors[g->ncolors-1].b);
@@ -159,11 +163,28 @@ static void print_colors(gradient *g, int old_webkit)
 				g->colors[i].r, g->colors[i].g, g->colors[i].b);
 		}
 	}
+	else if(mode == YUI3) {
+		for(i=0; i<g->ncolors; i++) {
+			printf("\t\t\t{ color: \"");
+			print_rgb(g->colors[i]);
+			printf("\"");
+			if(g->colors[i].pos != -1)
+				printf(", offset: %0.2f", (float)g->colors[i].pos/100);
+			printf(" }");
+			if(i<g->ncolors-1)
+				printf(",");
+			printf("\n");
+		}
+	}
 	else {
 		print_rgb(g->colors[0]);
+		if(g->colors[0].pos != -1)
+			printf(" %u%%", g->colors[0].pos);
 		for(i=1; i<g->ncolors; i++) {
 			printf(", ");
 			print_rgb(g->colors[i]);
+			if(g->colors[i].pos != -1)
+				printf(" %u%%", g->colors[i].pos);
 		}
 	}
 }
@@ -397,6 +418,7 @@ static void print_css_gradient(const char *fname, gradient g)
 	char *points[] = { "left", "top", "left top", "right top" };
 	char *wk_s_points[] = { "left top", "left top", "left top", "right top" };
 	char *wk_e_points[] = { "right top", "left bottom", "right bottom", "left bottom" };
+	int  rotations[]   = { 0, 90, 45, 135 };
 	char *classname, *c;
 	int i;
 
@@ -421,26 +443,40 @@ static void print_css_gradient(const char *fname, gradient g)
 
 	/* Gecko */
 	printf("\tbackground-image: -moz-linear-gradient(%s, ", points[g.start]);
-	print_colors(&g, 0);
+	print_colors(&g, CSS3);
 	printf(");\n");
 	/* Safari 4+, Chrome 1+ */
 	printf("\tbackground-image: -webkit-gradient(linear, %s, %s, ", wk_s_points[g.start], wk_e_points[g.start]);
-	print_colors(&g, 1);
+	print_colors(&g, WEBKIT);
 	printf(");\n");
 	/* Safari 5.1+, Chrome 10+ */
 	printf("\tbackground-image: -webkit-linear-gradient(%s, ", points[g.start]);
-	print_colors(&g, 0);
+	print_colors(&g, CSS3);
 	printf(");\n");
 	/* Opera */
 	printf("\tbackground-image: -o-linear-gradient(%s, ", points[g.start]);
-	print_colors(&g, 0);
+	print_colors(&g, CSS3);
 	printf(");\n");
 	/* Unprefixed */
 	printf("\tbackground-image: linear-gradient(%s, ", points[g.start]);
-	print_colors(&g, 0);
+	print_colors(&g, CSS3);
 	printf(");\n");
 
 	printf("}\n");
+
+	printf("graphics = graphics || {};\n");
+	printf("graphics[\"%s\"] = new Y.Graphic({ render: '#%s' });\n", classname, classname);
+	printf("graphics[\"%s\"].addShape({\n", classname);
+	printf("\ttype: \"rect\",\n");
+	printf("\theight: 200, width: 200,\n");
+	printf("\tfill: {\n");
+	printf("\t\ttype: \"linear\",\n");
+	printf("\t\tstops: [\n");
+	print_colors(&g, YUI3);
+	printf("\t\t],\n");
+	printf("\t\trotation: %d\n", rotations[g.start]);
+	printf("\t}\n");
+	printf("\n});\n");
 
 	free(classname);
 	free(g.colors);
