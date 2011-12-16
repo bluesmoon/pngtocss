@@ -24,9 +24,9 @@ to submit your own (keep them small).
 
 See the src/ directory for the source code.
 
-It's written in C, and uses libpng and zlib.  You'll need both of those to compile it.
-Also, I wrote it on MacOSX, so I installed the libraries using ports.  You may need to
-play with the Makefile if you're using a different OS.  Sorry, I don't have the time 
+It's written in C, and uses libpng and zlib. You'll need both of those to compile it.
+Also, I wrote it on Mac OS X where the deps are included out of the box. You may need
+to play with the Makefile if you're using a different OS. Sorry, I don't have the time 
 to test, but if you submit a pull request, I'll merge it.
 
 ## License:
