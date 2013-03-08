@@ -12,6 +12,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <png.h>
+#include <zlib.h>
 
 #define VERSION "0.1"
 
@@ -26,8 +27,7 @@ typedef enum {
 
 typedef enum {
 	CSS3 = 0,
-	WEBKIT = 1,
-	YUI3 = 2
+	YUI3 = 1
 } modes;
 
 typedef enum {
@@ -153,17 +153,7 @@ static void print_rgb(rgb c)
 static void print_colors(gradient *g, modes mode)
 {
 	int i;
-	if(mode == WEBKIT) {
-		printf("from(#%02x%02x%02x), to(#%02x%02x%02x)",
-				g->colors[0].r, g->colors[0].g, g->colors[0].b,
-				g->colors[g->ncolors-1].r, g->colors[g->ncolors-1].g, g->colors[g->ncolors-1].b);
-		for(i=1; i<g->ncolors-1; i++) {
-			printf(", color-stop(%u%%, #%02x%02x%02x)",
-				g->colors[i].pos,
-				g->colors[i].r, g->colors[i].g, g->colors[i].b);
-		}
-	}
-	else if(mode == YUI3) {
+	if(mode == YUI3) {
 		for(i=0; i<g->ncolors; i++) {
 			printf("\t\t\t{ color: \"");
 			print_rgb(g->colors[i]);
@@ -408,6 +398,7 @@ static status read_png(FILE *f, gradient *g)
 
 /*
  * Thanks to the following pages for info about this function:
+ * http://caniuse.com/#feat=css-gradients
  * http://css-tricks.com/css3-gradients/
  * http://webdesignerwall.com/tutorials/cross-browser-css-gradient
  * http://hacks.mozilla.org/2009/11/css-gradients-firefox-36/
@@ -415,9 +406,8 @@ static status read_png(FILE *f, gradient *g)
  */
 static void print_css_gradient(const char *fname, gradient g)
 {
-	char *points[] = { "left", "top", "left top", "right top" };
-	char *wk_s_points[] = { "left top", "left top", "left top", "right top" };
-	char *wk_e_points[] = { "right top", "left bottom", "right bottom", "left bottom" };
+	char *points[] = { "to right", "to bottom", "135deg", "45deg" };
+	char *wk_points[] = { "left", "top", "-45deg", "45deg" };
 	int  rotations[]   = { 0, 90, 45, 135 };
 	char *classname, *c;
 	int i;
@@ -441,23 +431,11 @@ static void print_css_gradient(const char *fname, gradient g)
 
 	printf(".%s {\n", classname);
 
-	/* Gecko */
-	printf("\tbackground-image: -moz-linear-gradient(%s, ", points[g.start]);
+	/* Legacy Webkit (<= Chrome 25) */
+	printf("\tbackground-image: -webkit-linear-gradient(%s, ", wk_points[g.start]);
 	print_colors(&g, CSS3);
 	printf(");\n");
-	/* Safari 4+, Chrome 1+ */
-	printf("\tbackground-image: -webkit-gradient(linear, %s, %s, ", wk_s_points[g.start], wk_e_points[g.start]);
-	print_colors(&g, WEBKIT);
-	printf(");\n");
-	/* Safari 5.1+, Chrome 10+ */
-	printf("\tbackground-image: -webkit-linear-gradient(%s, ", points[g.start]);
-	print_colors(&g, CSS3);
-	printf(");\n");
-	/* Opera */
-	printf("\tbackground-image: -o-linear-gradient(%s, ", points[g.start]);
-	print_colors(&g, CSS3);
-	printf(");\n");
-	/* Unprefixed */
+	/* Standard W3C */
 	printf("\tbackground-image: linear-gradient(%s, ", points[g.start]);
 	print_colors(&g, CSS3);
 	printf(");\n");
