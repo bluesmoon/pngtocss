@@ -12,6 +12,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <png.h>
+#include <zlib.h>
 
 #define VERSION "0.1"
 
