@@ -83,6 +83,9 @@ static void print_error(const char *fname, status err)
 		case E_NOT_SUPPORTED:
 			emsg = "Gradient type not supported";
 			break;
+		case OK:
+			emsg = "ok";
+			break;
 	}
 
 	fprintf(stderr, "Error with ``%s''; %s\n", fname, emsg);
