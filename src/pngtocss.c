@@ -420,6 +420,7 @@ static status read_png(FILE *f, gradient *g)
 static void print_css_gradient(const char *fname, gradient g)
 {
 	char *points[] = { "left", "top", "left top", "right top" };
+	char *w3points[] = { "to right", "to bottom", "to right bottom", "to left bottom" };
 	char *wk_s_points[] = { "left top", "left top", "left top", "right top" };
 	char *wk_e_points[] = { "right top", "left bottom", "right bottom", "left bottom" };
 	int  rotations[]   = { 0, 90, 45, 135 };
@@ -462,7 +463,7 @@ static void print_css_gradient(const char *fname, gradient g)
 	print_colors(&g, CSS3);
 	printf(");\n");
 	/* Unprefixed */
-	printf("\tbackground-image: linear-gradient(%s, ", points[g.start]);
+	printf("\tbackground-image: linear-gradient(%s, ", w3points[g.start]);
 	print_colors(&g, CSS3);
 	printf(");\n");
 
