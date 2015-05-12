@@ -95,7 +95,7 @@ static void print_error(const char *fname, status err)
 static void version_info()
 {
 	fprintf(stderr, "pngtocss v%s\n", VERSION);
-	fprintf(stderr, "   Copyright 2011 Philip Tellis\n");
+	fprintf(stderr, "   Copyright 2011-2015 Philip Tellis\n");
 	fprintf(stderr, "   https://github.com/bluesmoon/pngtocss\n\n");
 	fprintf(stderr, "   Distributed under the terms of the BSD license\n\n");
 	fprintf(stderr, "   Compiled with libpng %s; using libpng %s.\n",
