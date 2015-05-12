@@ -53,7 +53,7 @@ The CSS gradient syntax came from these wonderful sites:
 
 Nicole tweeted about [the absence of a tool to convert images to gradients](http://twitter.com/stubbornella/status/61499795801505792/):
 
-![Screenshot of Nicole's tweet](https://img.skitch.com/20110423-dh9axwes4t8d8srfcsw1n774i4.png)
+![Screenshot of Nicole's tweet](tweet.png)
 
 I realised that I knew neither what CSS gradients were, nor how to read a PNG file, so
 figured that this was a good opportunity to learn both at once.  I decided to write it
