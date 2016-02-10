@@ -15,7 +15,6 @@ draw that gradient.
 *  radial gradients
 *  angular gradients (except for perfect diagonal)
 *  more than 2 colours on diagonal gradients
-*  alpha transparency
 
 ## Code
 
@@ -24,10 +23,12 @@ to submit your own (keep them small).
 
 See the src/ directory for the source code.
 
-It's written in C, and uses libpng and zlib.  You'll need both of those to compile it.
+It's written in C, and uses libpng 1.6.21 and zlib 1.2.8. You'll need both of those to compile it.
 Also, I wrote it on MacOSX, so I installed the libraries using ports.  You may need to
 play with the Makefile if you're using a different OS.  Sorry, I don't have the time 
 to test, but if you submit a pull request, I'll merge it.
+
+It has also been tested to work with the current latest beta version of libpng17 (1.7.0beta78). You can find the Portfile in the ports/graphics/libpng/ directory to help you install it with MacPorts if you are on MacOSX.
 
 ## License:
 
