@@ -18,15 +18,6 @@
 #define VERSION "0.1"
 
 typedef enum {
-	OK = 0,
-	E_NOT_PNG,
-	E_NO_MEM,
-	E_INTERNAL,
-	E_NO_FILE,
-	E_NOT_SUPPORTED
-} status;
-
-typedef enum {
 	CSS3 = 0,
 	WEBKIT = 1,
 	YUI3 = 2
@@ -43,54 +34,33 @@ typedef enum {
 	bottom_right
 } point;
 
-typedef struct {
-	unsigned char *data;
-	png_uint_32 height;
-	png_uint_32 width;
-	int pxbytes;
-	png_bytep *row_pointers;
-} bmp;
+/* The super-class of a png_image, contains the decoded image plus additional
+ * data. The height and width of the image are in the png_image structure.
+ */
+typedef struct
+{
+	png_image image;
+	const char *file_name;
+	png_bytep buffer;
+	ptrdiff_t stride;
+	png_uint_16 colormap[256 * 4];
+	png_uint_16 pixel_bytes;
+} image;
 
 /* We use int to avoid overflow when averaging */
 typedef struct {
 	int r;
 	int g;
 	int b;
+	int a;
 	int pos;
-} rgb;
+} rgba;
 
 typedef struct {
 	point start;
 	int ncolors;
-	rgb *colors;
+	rgba *colors;
 } gradient;
-
-static void print_error(const char *fname, status err)
-{
-	char *emsg = "";
-
-	switch(err) {
-		case E_NOT_PNG:
-			emsg = "File is not a png";
-			break;
-		case E_NO_MEM:
-			emsg = "Out of memory";
-			break;
-		case E_INTERNAL:
-			emsg = "Problem inside libpng";
-			break;
-		case E_NO_FILE:
-			emsg = "Could not open file";
-			break;
-		case E_NOT_SUPPORTED:
-			emsg = "Gradient type not supported";
-			break;
-		case OK:
-			return;
-	}
-
-	fprintf(stderr, "Error with ``%s''; %s\n", fname, emsg);
-}
 
 static void version_info()
 {
@@ -109,47 +79,95 @@ static void usage_info()
 	fprintf(stderr, "Usage: pngtocss <image1.png> <image2.png> ...\n");
 }
 
-static rgb byte2rgb(png_bytep triad)
+static rgba byte2rgba(png_bytep quartet)
 {
-	rgb c;
+	rgba c;
 
-	c.r = triad[0];
-	c.g = triad[1];
-	c.b = triad[2];
+	/* Pixels with an alpha value of 0 have bogus color values in the buffer, so
+	 * we are normalizing them to 0.
+	 */
+	if (quartet[3] == 0) {
+		c.r = 0;
+		c.g = 0;
+		c.b = 0;
+	}
+	else {
+		c.r = quartet[0];
+		c.g = quartet[1];
+		c.b = quartet[2];
+	}
+
+	c.a = quartet[3];
 
 	c.pos = -1;
 
 	return c;
 }
 
-static rgb getpixel(const bmp *image, png_uint_32 x, png_uint_32 y)
+static rgba getpixel(const image *image, png_uint_32 x, png_uint_32 y)
 {
-	return byte2rgb(image->data + (y*image->width*image->pxbytes) + x*image->pxbytes);
+	return byte2rgba(image->buffer +
+		(y*image->image.width*image->pixel_bytes) +
+		x*image->pixel_bytes);
 }
 
-static rgb rgb_avg(rgb a, rgb b)
+static rgba rgba_avg(rgba a, rgba b)
 {
-	rgb c;
+	rgba c;
+
+	/* Pixels with an alpha value of 0 will be black, which messes up the
+	 * averaging in most cases. To circumvent this, the black pixel will take on
+	 * the color values of the pixel it is being averaged with.
+	 */
+
+	if(a.a == 0) {
+		a.r = b.r;
+		a.g = b.g;
+		a.b = b.b;
+	}
+
+	if(b.a == 0) {
+		b.r = a.r;
+		b.g = a.g;
+		b.b = a.b;
+	}
 
 	c.r = (a.r+b.r)/2;
 	c.g = (a.g+b.g)/2;
 	c.b = (a.b+b.b)/2;
+	c.a = (a.a+b.a)/2;
 
 	return c;
 }
 
-static int rgb_equal(rgb a, rgb b)
+static int rgba_equal(const rgba a, const rgba b)
 {
-	/* Match with a tolerance of 2 */
-	if(a.r <= b.r+2 && a.r >= b.r-2
-	&& a.g <= b.g+2 && a.g >= b.g-2
-       	&& a.b <= b.b+2 && a.b >= b.b-2) {
+	const int tolerance = 2;
+	if(a.a == 0 && b.a == 0)
 		return 1;
-	}
+	/* Match with a tolerance */
+	else if(a.r <= b.r+tolerance && a.r >= b.r-tolerance &&
+			a.g <= b.g+tolerance && a.g >= b.g-tolerance &&
+			a.b <= b.b+tolerance && a.b >= b.b-tolerance &&
+			a.a <= b.a+tolerance && a.a >= b.a-tolerance)
+		return 1;
+	
 	return 0;
 }
 
-static void print_rgb(rgb c)
+static double decimal2ratio(int a)
+{
+	char buffer[256];
+	snprintf(buffer, 256, "%.2f", a/255.0);
+	return atof(buffer);
+}
+
+static void print_rgba(rgba c)
+{
+	printf("rgba(%i,%i,%i,%.3g)", c.r, c.g, c.b, decimal2ratio(c.a));
+}
+
+static void print_rgb(rgba c)
 {
 	printf("#%02x%02x%02x", c.r, c.g, c.b);
 }
@@ -158,19 +176,34 @@ static void print_colors(gradient *g, modes mode)
 {
 	int i;
 	if(mode == WEBKIT) {
-		printf("from(#%02x%02x%02x), to(#%02x%02x%02x)",
+		if(g->colors[0].a == 255)
+			printf("from(#%02x%02x%02x), to(#%02x%02x%02x)",
 				g->colors[0].r, g->colors[0].g, g->colors[0].b,
 				g->colors[g->ncolors-1].r, g->colors[g->ncolors-1].g, g->colors[g->ncolors-1].b);
+		else
+			printf("from(rgba(%i,%i,%i,%.3g)), to(rgba(%i,%i,%i,%.3g))",
+				g->colors[0].r, g->colors[0].g, g->colors[0].b, decimal2ratio(g->colors[0].a),
+				g->colors[g->ncolors-1].r, g->colors[g->ncolors-1].g, g->colors[g->ncolors-1].b,
+				decimal2ratio(g->colors[g->ncolors-1].a));
 		for(i=1; i<g->ncolors-1; i++) {
-			printf(", color-stop(%u%%, #%02x%02x%02x)",
-				g->colors[i].pos,
-				g->colors[i].r, g->colors[i].g, g->colors[i].b);
+			if(g->colors[i].a == 255)
+				printf(", color-stop(%u%%, #%02x%02x%02x)",
+					g->colors[i].pos,
+					g->colors[i].r, g->colors[i].g, g->colors[i].b);
+			else
+				printf(", color-stop(%u%%, rgba(%i,%i,%i,%.3g))",
+					g->colors[i].pos,
+					g->colors[i].r, g->colors[i].g, g->colors[i].b,
+					decimal2ratio(g->colors[i].a));
 		}
 	}
 	else if(mode == YUI3) {
 		for(i=0; i<g->ncolors; i++) {
 			printf("\t\t\t{ color: \"");
-			print_rgb(g->colors[i]);
+			if(g->colors[i].a == 255)
+				print_rgb(g->colors[i]);
+			else
+				print_rgba(g->colors[i]);
 			printf("\"");
 			if(g->colors[i].pos != -1)
 				printf(", offset: %0.2f", (float)g->colors[i].pos/100);
@@ -181,61 +214,77 @@ static void print_colors(gradient *g, modes mode)
 		}
 	}
 	else {
-		print_rgb(g->colors[0]);
+		if(g->colors[0].a == 255)
+			print_rgb(g->colors[0]);
+		else
+			print_rgba(g->colors[0]);
 		if(g->colors[0].pos != -1)
 			printf(" %u%%", g->colors[0].pos);
 		for(i=1; i<g->ncolors; i++) {
 			printf(", ");
-			print_rgb(g->colors[i]);
+			if(g->colors[i].a == 255)
+				print_rgb(g->colors[i]);
+			else
+				print_rgba(g->colors[i]);
 			if(g->colors[i].pos != -1)
 				printf(" %u%%", g->colors[i].pos);
 		}
 	}
 }
 
-static void calculate_gradient(const bmp *image, gradient *g)
+static int calculate_gradient(const image *image, gradient *g)
 {
-	rgb tl, tr, bl, br, mid, avg;
+	rgba tl, tr, bl, br, mid, avg;
 	png_uint_32 i, l, base, min, max;
 	png_uint_32 xy[2][2] = {{0, 0},{0, 0}};
 
 	tl = getpixel(image, 0, 0);
-	tr = getpixel(image, image->width-1, 0);
-	bl = getpixel(image, 0, image->height-1);
-	br = getpixel(image, image->width-1, image->height-1);
+	tr = getpixel(image, image->image.width-1, 0);
+	bl = getpixel(image, 0, image->image.height-1);
+	br = getpixel(image, image->image.width-1, image->image.height-1);
 
-	if(rgb_equal(tl, tr)) {
+	if(rgba_equal(tl, tr)) {
 		g->start = top;
-		l=image->height;
+		l=image->image.height;
 		if(l % 2 == 1) {
 			mid = getpixel(image, 0, l/2);
 		}
 		else {
-			mid = rgb_avg(getpixel(image, 0, l/2), getpixel(image, 0, l/2-1));
+			mid = rgba_avg(getpixel(image, 0, l/2), getpixel(image, 0, l/2-1));
 		}
 	}
-	else if(rgb_equal(tl, bl)) {
+	else if(rgba_equal(tl, bl)) {
 		g->start = left;
-		l=image->width;
+		l=image->image.width;
 		if(l % 2 == 1) {
 			mid = getpixel(image, l/2, 0);
 		}
 		else {
-			mid = rgb_avg(getpixel(image, l/2, 0), getpixel(image, l/2-1, 0));
+			mid = rgba_avg(getpixel(image, l/2, 0), getpixel(image, l/2-1, 0));
 		}
 	}
-	else if(rgb_equal(tr, bl) && !rgb_equal(tl, br)) {
+	else if(rgba_equal(tr, bl) && !rgba_equal(tl, br)) {
 		g->start = top_left;
-		l=image->height;
+		l=image->image.height;
 	}
-	else if(rgb_equal(tl, br) && !rgb_equal(tr, bl)) {
+	else if(rgba_equal(tl, br) && !rgba_equal(tr, bl)) {
 		g->start = top_right;
-		l=image->height;
+		l=image->image.height;
 		tl = tr;
 		br = bl;
 	}
+	else { /* Defaulting to vertical gradient */
+		g->start = top;
+		l=image->image.height;
+		if(l % 2 == 1) {
+			mid = getpixel(image, 0, l/2);
+		}
+		else {
+			mid = rgba_avg(getpixel(image, 0, l/2), getpixel(image, 0, l/2-1));
+		}
+	}
 
-	g->colors = (rgb *)calloc(2, sizeof(rgb));
+	g->colors = (rgba *)calloc(2, sizeof(rgba));
 	g->colors[0] = tl;
 	g->colors[1] = br;
 	g->ncolors = 2;
@@ -246,9 +295,9 @@ static void calculate_gradient(const bmp *image, gradient *g)
 	/* Also, if the image is less than 3 pixels in the direction of the gradient, then you
 	 * really cannot have more than 2 colours */
 	if(g->start == top_left || g->start == top_right || l < 3
-		|| rgb_equal(mid, rgb_avg(tl, br))) {
+		|| rgba_equal(mid, rgba_avg(tl, br))) {
 
-		return;
+		return 0;
 	}
 
 	/* Now we come to the complicated part where there are more than 2 colours 
@@ -265,21 +314,22 @@ static void calculate_gradient(const bmp *image, gradient *g)
 	min = base = 0;
 	xy[0][g->start] = base;
 	max = i = 2;
+
 	while(i+base<l) {
 		xy[1][g->start] = i+base;
-		avg = rgb_avg(getpixel(image, xy[0][0], xy[0][1]), getpixel(image, xy[1][0], xy[1][1]));
+		avg = rgba_avg(getpixel(image, xy[0][0], xy[0][1]), getpixel(image, xy[1][0], xy[1][1]));
 		if((i+base) % 2 == 0) {
 			mid = getpixel(image, (xy[1][0]+xy[0][0])/2, (xy[1][1]+xy[0][1])/2);
 		}
 		else {
-			mid = rgb_avg(
+			mid = rgba_avg(
 					getpixel(image, (xy[1][0]+xy[0][0])/2, (xy[1][1]+xy[0][1])/2),
 					getpixel(image, (xy[1][0]+xy[0][0])/2+1, (xy[1][1]+xy[0][1])/2+1)
 				     );
 		}
 
 
-		if(!rgb_equal(avg, mid)) {
+		if(!rgba_equal(avg, mid)) {
 			if(min == max) {
 				min++;
 				max=i=min+2;
@@ -296,12 +346,20 @@ static void calculate_gradient(const bmp *image, gradient *g)
 				i++;
 			}
 			else {
-				g->ncolors++;
-				g->colors = (rgb *)realloc(g->colors, sizeof(rgb)*g->ncolors);
-				g->colors[g->ncolors-2] = getpixel(image, xy[1][0], xy[1][1]);
-				g->colors[g->ncolors-2].pos = (i+base)*100/l;
+				/* If current and previous positions are not the same */
+				if (g->colors[g->ncolors - 2].pos != (i + base) * 100 / l &&
+					(i + base) * 100 / l != 0) {
+					g->ncolors++;
+					g->colors = (rgba *)realloc(g->colors, sizeof(rgba)*g->ncolors);
+					g->colors[g->ncolors-2] = getpixel(image, xy[1][0], xy[1][1]);
+					g->colors[g->ncolors-2].pos = (i+base)*100/l;
+				}
 
-				base += i;
+				if (i == 0) /* Needed to avoid infinite loop */
+					base += i + 1;
+				else
+					base += i;
+
 				min = 0;
 				max = i = l-base-1;
 				xy[0][g->start] = base;
@@ -321,93 +379,52 @@ static void calculate_gradient(const bmp *image, gradient *g)
 		}
 	}
 	g->colors[g->ncolors-1] = br;
+
+	if(g->colors == 0)
+		return 0;
+	else
+		return 1;
 }
 
-
-/*
- * Thanks to this site for information on reading a png:
- * http://www.libpng.org/pub/png/book/chapter13.html
- */
-static status check_sig(FILE *f)
+static int read_png(const char *fname, image *image, gradient *g)
 {
-	unsigned char sig[8];
-	int n;
-	n = fread(sig, 1, 8, f);
-	if(n < 8 || !png_check_sig(sig, 8)) {
-		return E_NOT_PNG;
+	int result = 0;
+	memset(&image->image, 0, sizeof image->image);
+	image->image.version = PNG_IMAGE_VERSION;
+
+	if (png_image_begin_read_from_file(&image->image, image->file_name))
+	{
+		image->image.format = PNG_FORMAT_RGBA;
+		image->stride = PNG_IMAGE_ROW_STRIDE(image->image);
+		image->buffer = malloc(PNG_IMAGE_SIZE(image->image));
+		image->pixel_bytes = PNG_IMAGE_PIXEL_SIZE(image->image.format);
+
+		if (image->buffer != NULL) {
+			if(png_image_finish_read(&image->image, NULL /*background*/,
+									 image->buffer, (png_int_32)image->stride,
+									 image->colormap)) {
+
+				if(calculate_gradient(image, g))
+					result = 1;
+				else
+					printf("pngtocss: Gradient type not supported\n");
+			}
+			else {
+				fprintf(stderr, "pngtocss: read %s: %s\n", fname,
+						image->image.message);
+
+				png_image_free(&image->image);
+			}
+		}
+		else
+			fprintf(stderr, "pngtocss: out of memory: %lu bytes\n",
+					(unsigned long)PNG_IMAGE_SIZE(image->image));
 	}
+	else
+		/* Failed to read the argument: */
+		fprintf(stderr, "pngtocss: %s: %s\n", fname, image->image.message);
 
-	return OK;
-}
-
-static status read_png(FILE *f, gradient *g)
-{
-	png_structp png_ptr;
-	png_infop info_ptr;
-	int bit_depth, color_type, i;
-	png_uint_32 rowbytes;
-	bmp image;
-
-	png_ptr = png_create_read_struct(PNG_LIBPNG_VER_STRING, NULL, NULL, NULL);
-
-	if(!png_ptr) {
-		return E_NO_MEM;
-	}
-
-	info_ptr = png_create_info_struct(png_ptr);
-	if(!info_ptr) {
-		png_destroy_read_struct(&png_ptr, NULL, NULL);
-		return E_NO_MEM;
-	}
-
-	/* TODO Figure out how to do this without setjmp */
-#if (PNG_LIBPNG_VER < 10500)
-	if (setjmp(png_ptr->jmpbuf)) {
-#else
-	if (setjmp(png_jmpbuf(png_ptr))) {
-#endif
-		png_destroy_read_struct(&png_ptr, &info_ptr, NULL);
-		return E_INTERNAL;
-	}
-
-	png_init_io(png_ptr, f);
-	png_set_sig_bytes(png_ptr, 8);
-	png_read_info(png_ptr, info_ptr);
-
-	png_get_IHDR(png_ptr, info_ptr, &image.width, &image.height, &bit_depth, &color_type, NULL, NULL, NULL);
-
-	if( (image.row_pointers = (png_bytep *)malloc(sizeof(png_bytep) * image.height)) == NULL) {
-		png_destroy_read_struct(&png_ptr, NULL, NULL);
-		return E_NO_MEM;
-	}
-
-	rowbytes = png_get_rowbytes(png_ptr, info_ptr);
-
-	image.pxbytes = rowbytes/image.width;
-
-	if( (image.data = (unsigned char *)malloc(rowbytes * image.height)) == NULL) {
-		png_destroy_read_struct(&png_ptr, NULL, NULL);
-		free(image.row_pointers);
-		return E_NO_MEM;
-	}
-
-	for(i=0; i<image.height; i++) {
-		image.row_pointers[i] = image.data + i*rowbytes;
-	}
-
-	png_read_image(png_ptr, image.row_pointers);
-	png_read_end(png_ptr, NULL);
-
-	calculate_gradient(&image, g);
-
-	free(image.data);
-	free(image.row_pointers);
-
-	if(g->ncolors == 0) {
-		return E_NOT_SUPPORTED;
-	}
-
-	return OK;
+	return result;
 }
 
 /*
@@ -425,7 +442,6 @@ static void print_css_gradient(const char *fname, gradient g)
 	char *wk_e_points[] = { "right top", "left bottom", "right bottom", "left bottom" };
 	int  rotations[]   = { 0, 90, 45, 135 };
 	char *classname, *c;
-	int i;
 
 	if(g.ncolors == 0) {
 		return;
@@ -488,47 +504,35 @@ static void print_css_gradient(const char *fname, gradient g)
 	g.colors=NULL;
 }
 
-static status process_file(const char *fname)
+static int process_file(const char *fname)
 {
-	FILE *f;
-	status stat=OK;
+	image image;
+	image.file_name = fname;
+	int result;
 	gradient g;
 
-	f = fopen(fname, "rb");
-	if(!f) {
-		return E_NO_FILE;
-	}
-	stat = check_sig(f);
+	result = read_png(fname, &image, &g);
 
-	if(stat == OK) {
-		stat = read_png(f, &g);
-	}
+	if(result)
+		print_css_gradient(image.file_name, g);
 
-	fclose(f);
-
-	if(stat == OK) {
-		print_css_gradient(fname, g);
-	}
-
-	return stat;
+	return result;
 }
 
 int main(int argc, char **argv)
 {
 	int i=1;
-	status err=OK;
+	int result = 1;
 
 	if(argc == 1) {
 		version_info();
 		usage_info();
-		return OK;
+		return result;
 	}
 
-	for(i=1; i<argc; i++) {
-		if((err = process_file(argv[i])) != OK) {
-			print_error(argv[i], err);
-		}
-	}
+	for(i=1; i<argc; i++)
+		if(result)
+			result = process_file(argv[i]);
 
-	return err;
+	return result;
 }
