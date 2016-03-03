@@ -521,18 +521,21 @@ static int process_file(const char *fname)
 
 int main(int argc, char **argv)
 {
-	int i=1;
+	int i;
 	int result = 1;
 
 	if(argc == 1) {
 		version_info();
 		usage_info();
-		return result;
+		return EXIT_SUCCESS;
 	}
 
 	for(i=1; i<argc; i++)
 		if(result)
 			result = process_file(argv[i]);
 
-	return result;
+	if(result)
+		return EXIT_SUCCESS;
+	else
+		return EXIT_FAILURE;
 }
