@@ -66,4 +66,4 @@ Patches welcome.
 
 ## Discussion
 
-Talk about pngtocss on the [discussion page](http://bluesmoon.github.com/pngtocss/)
+Talk about pngtocss on the [discussion page](https://github.com/bluesmoon/pngtocss/discussions)
