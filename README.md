@@ -30,7 +30,7 @@ to test, but if you submit a pull request, I'll merge it.
 
 ## License:
 
-BSD Licensed
+BSD Licensed v2.0
 
 ## Copyright:
 
