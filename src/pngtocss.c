@@ -237,6 +237,15 @@ static int calculate_gradient(const image *image, gradient *g)
 	rgba tl, tr, bl, br, mid, avg;
 	png_uint_32 i, l, base, min, max;
 	png_uint_32 xy[2][2] = {{0, 0},{0, 0}};
+	void *tmp_ptr = NULL;
+
+	g->ncolors = 2;
+	g->colors = (rgba *)calloc(g->ncolors, sizeof(rgba));
+	if(g->colors == NULL) {
+		fprintf(stderr, "pngtocss: out of memory calculating gradient: %lu bytes\n", (unsigned long)sizeof(rgba)*g->ncolors);
+		g->ncolors=0;
+		return 0;
+	}
 
 	tl = getpixel(image, 0, 0);
 	tr = getpixel(image, image->image.width-1, 0);
@@ -284,10 +293,8 @@ static int calculate_gradient(const image *image, gradient *g)
 		}
 	}
 
-	g->colors = (rgba *)calloc(2, sizeof(rgba));
 	g->colors[0] = tl;
 	g->colors[1] = br;
-	g->ncolors = 2;
 
 	/* If it's a diagonal, we only support 2 colours */
 	/* If it's horizontal or vertical and the middle colour is the avg of the ends, then
@@ -349,7 +356,14 @@ static int calculate_gradient(const image *image, gradient *g)
 				if (g->colors[g->ncolors - 2].pos != (i + base) * 100 / l &&
 					(i + base) * 100 / l != 0) {
 					g->ncolors++;
-					g->colors = (rgba *)realloc(g->colors, sizeof(rgba)*g->ncolors);
+					tmp_ptr = realloc(g->colors, sizeof(rgba)*g->ncolors);
+					if(tmp_ptr == NULL) {
+						fprintf(stderr, "pngtocss: out of memory calculating gradient: %lu bytes\n", (unsigned long)sizeof(rgba)*g->ncolors);
+						free(g->colors);
+						g->ncolors=0;
+						return 0;
+					}
+					g->colors = (rgba *)tmp_ptr;
 					g->colors[g->ncolors-2] = getpixel(image, xy[1][0], xy[1][1]);
 					g->colors[g->ncolors-2].pos = (i+base)*100/l;
 				}
