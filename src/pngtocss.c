@@ -393,51 +393,48 @@ static int calculate_gradient(const image *image, gradient *g)
 	}
 	g->colors[g->ncolors-1] = br;
 
-	if(g->colors == 0)
-		return 0;
-	else
-		return 1;
+	return 1;
 }
 
-static int read_png(const char *fname, image *image, gradient *g)
+static gradient read_png_gradient(const char *fname)
 {
-	int result = 0;
-	memset(&image->image, 0, sizeof image->image);
-	image->image.version = PNG_IMAGE_VERSION;
+	image image;
+	gradient g;
 
-	if (png_image_begin_read_from_file(&image->image, image->file_name))
-	{
-		image->image.format = PNG_FORMAT_RGBA;
-		image->stride = PNG_IMAGE_ROW_STRIDE(image->image);
-		image->buffer = malloc(PNG_IMAGE_SIZE(image->image));
-		image->pixel_bytes = PNG_IMAGE_PIXEL_SIZE(image->image.format);
+	image.file_name = fname;
 
-		if (image->buffer != NULL) {
-			if(png_image_finish_read(&image->image, NULL /*background*/,
-									 image->buffer, (png_int_32)image->stride,
-									 image->colormap)) {
+	memset(&image.image, 0, sizeof image.image);
+	image.image.version = PNG_IMAGE_VERSION;
 
-				if(calculate_gradient(image, g))
-					result = 1;
-				else
-					printf("pngtocss: Gradient type not supported\n");
-			}
-			else {
-				fprintf(stderr, "pngtocss: read %s: %s\n", fname,
-						image->image.message);
-
-				png_image_free(&image->image);
-			}
-		}
-		else
-			fprintf(stderr, "pngtocss: out of memory: %lu bytes\n",
-					(unsigned long)PNG_IMAGE_SIZE(image->image));
-	}
-	else
+	if(!png_image_begin_read_from_file(&image.image, image.file_name)) {
 		/* Failed to read the argument: */
-		fprintf(stderr, "pngtocss: %s: %s\n", fname, image->image.message);
+		fprintf(stderr, "pngtocss: %s: %s\n", fname, image.image.message);
+		return g;
+	}
 
-	return result;
+	image.image.format = PNG_FORMAT_RGBA;
+	image.stride = PNG_IMAGE_ROW_STRIDE(image.image);
+	image.buffer = malloc(PNG_IMAGE_SIZE(image.image));
+	image.pixel_bytes = PNG_IMAGE_PIXEL_SIZE(image.image.format);
+
+	if (image.buffer == NULL) {
+		fprintf(stderr, "pngtocss: out of memory: %lu bytes\n", (unsigned long)PNG_IMAGE_SIZE(image.image));
+		return g;
+	}
+
+	if(!png_image_finish_read(&image.image, NULL /*background*/, image.buffer, (png_int_32)image.stride, image.colormap)) {
+		fprintf(stderr, "pngtocss: read %s: %s\n", fname, image.image.message);
+		png_image_free(&image.image);
+		return g;
+	}
+
+	if(!calculate_gradient(&image, &g)) {
+		png_image_free(&image.image);
+		return g;
+	}
+
+	png_image_free(&image.image);
+	return g;
 }
 
 /*
@@ -478,21 +475,19 @@ static void print_css_gradient(const char *fname, gradient g)
 	printf("}\n");
 
 	free(classname);
-	free(g.colors);
-	g.colors=NULL;
 }
 
 static int process_file(const char *fname)
 {
-	image image;
-	image.file_name = fname;
 	int result;
 	gradient g;
 
-	result = read_png(fname, &image, &g);
+	g = read_png_gradient(fname);
 
-	if(result)
-		print_css_gradient(image.file_name, g);
+	print_css_gradient(fname, g);
+
+	free(g.colors);
+	g.colors=NULL;
 
 	return result;
 }
