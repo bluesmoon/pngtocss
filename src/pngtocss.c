@@ -65,7 +65,7 @@ typedef struct {
 static void version_info()
 {
 	fprintf(stderr, "pngtocss v%s\n", VERSION);
-	fprintf(stderr, "   Copyright 2011-2015 Philip Tellis\n");
+	fprintf(stderr, "   Copyright 2011-2022 Philip Tellis\n");
 	fprintf(stderr, "   https://github.com/bluesmoon/pngtocss\n\n");
 	fprintf(stderr, "   Distributed under the terms of the BSD license\n\n");
 	fprintf(stderr, "   Compiled with libpng %s; using libpng %s.\n",
@@ -436,11 +436,7 @@ static int read_png(const char *fname, image *image, gradient *g)
  */
 static void print_css_gradient(const char *fname, gradient g)
 {
-	char *points[] = { "left", "top", "left top", "right top" };
 	char *w3points[] = { "to right", "to bottom", "to right bottom", "to left bottom" };
-	char *wk_s_points[] = { "left top", "left top", "left top", "right top" };
-	char *wk_e_points[] = { "right top", "left bottom", "right bottom", "left bottom" };
-	int  rotations[]   = { 0, 90, 45, 135 };
 	char *classname, *c;
 
 	if(g.ncolors == 0) {
@@ -462,42 +458,11 @@ static void print_css_gradient(const char *fname, gradient g)
 
 	printf(".%s {\n", classname);
 
-	/* Gecko */
-	printf("\tbackground-image: -moz-linear-gradient(%s, ", points[g.start]);
-	print_colors(&g, CSS3);
-	printf(");\n");
-	/* Safari 4+, Chrome 1+ */
-	printf("\tbackground-image: -webkit-gradient(linear, %s, %s, ", wk_s_points[g.start], wk_e_points[g.start]);
-	print_colors(&g, WEBKIT);
-	printf(");\n");
-	/* Safari 5.1+, Chrome 10+ */
-	printf("\tbackground-image: -webkit-linear-gradient(%s, ", points[g.start]);
-	print_colors(&g, CSS3);
-	printf(");\n");
-	/* Opera */
-	printf("\tbackground-image: -o-linear-gradient(%s, ", points[g.start]);
-	print_colors(&g, CSS3);
-	printf(");\n");
-	/* Unprefixed */
 	printf("\tbackground-image: linear-gradient(%s, ", w3points[g.start]);
 	print_colors(&g, CSS3);
 	printf(");\n");
 
 	printf("}\n");
-
-	printf("graphics = graphics || {};\n");
-	printf("graphics[\"%s\"] = new Y.Graphic({ render: '#%s' });\n", classname, classname);
-	printf("graphics[\"%s\"].addShape({\n", classname);
-	printf("\ttype: \"rect\",\n");
-	printf("\theight: 200, width: 200,\n");
-	printf("\tfill: {\n");
-	printf("\t\ttype: \"linear\",\n");
-	printf("\t\tstops: [\n");
-	print_colors(&g, YUI3);
-	printf("\t\t],\n");
-	printf("\t\trotation: %d\n", rotations[g.start]);
-	printf("\t}\n");
-	printf("\n});\n");
 
 	free(classname);
 	free(g.colors);
