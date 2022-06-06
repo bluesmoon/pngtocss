@@ -294,10 +294,9 @@ static int calculate_gradient(const image *image, gradient *g)
 	 * we only need two colours */
 	/* Also, if the image is less than 3 pixels in the direction of the gradient, then you
 	 * really cannot have more than 2 colours */
-	if(g->start == top_left || g->start == top_right || l < 3
-		|| rgba_equal(mid, rgba_avg(tl, br))) {
+	if(g->start == top_left || g->start == top_right || l < 3 || rgba_equal(mid, rgba_avg(tl, br))) {
 
-		return 0;
+		return 1;
 	}
 
 	/* Now we come to the complicated part where there are more than 2 colours 
