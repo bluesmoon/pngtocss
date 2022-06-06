@@ -34,7 +34,7 @@ BSD Licensed
 
 ## Copyright:
 
-2011 Philip Tellis -- <philip@bluesmoon.info> -- http://bluesmoon.info/
+&copy; Philip Tellis -- <philip@bluesmoon.info> -- http://bluesmoon.info/
 
 ## Credits:
 
