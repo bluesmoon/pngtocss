@@ -356,6 +356,7 @@ static gradient read_png_gradient(const char *fname)
 	image image;
 	gradient g;
 	g.colors = NULL;
+	g.ncolors = 0;
 
 	image.file_name = fname;
 
@@ -405,7 +406,7 @@ static void print_css_gradient(const char *fname, gradient g)
 	char *w3points[] = { "to right", "to bottom", "to right bottom", "to left bottom" };
 	char *classname, *c;
 
-	if(g.ncolors == 0) {
+	if(g.ncolors == 0 || !g.colors) {
 		return;
 	}
 
