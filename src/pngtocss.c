@@ -18,12 +18,6 @@
 #define VERSION "0.1"
 
 typedef enum {
-	CSS3 = 0,
-	WEBKIT = 1,
-	YUI3 = 2
-} modes;
-
-typedef enum {
 	left,
 	top,
 	top_left,
@@ -172,63 +166,23 @@ static void print_rgb(rgba c)
 	printf("#%02x%02x%02x", c.r, c.g, c.b);
 }
 
-static void print_colors(gradient *g, modes mode)
+static void print_colors(gradient *g)
 {
 	int i;
-	if(mode == WEBKIT) {
-		if(g->colors[0].a == 255)
-			printf("from(#%02x%02x%02x), to(#%02x%02x%02x)",
-				g->colors[0].r, g->colors[0].g, g->colors[0].b,
-				g->colors[g->ncolors-1].r, g->colors[g->ncolors-1].g, g->colors[g->ncolors-1].b);
+	if(g->colors[0].a == 255)
+		print_rgb(g->colors[0]);
+	else
+		print_rgba(g->colors[0]);
+	if(g->colors[0].pos != -1)
+		printf(" %u%%", g->colors[0].pos);
+	for(i=1; i<g->ncolors; i++) {
+		printf(", ");
+		if(g->colors[i].a == 255)
+			print_rgb(g->colors[i]);
 		else
-			printf("from(rgba(%i,%i,%i,%.3g)), to(rgba(%i,%i,%i,%.3g))",
-				g->colors[0].r, g->colors[0].g, g->colors[0].b, decimal2ratio(g->colors[0].a),
-				g->colors[g->ncolors-1].r, g->colors[g->ncolors-1].g, g->colors[g->ncolors-1].b,
-				decimal2ratio(g->colors[g->ncolors-1].a));
-		for(i=1; i<g->ncolors-1; i++) {
-			if(g->colors[i].a == 255)
-				printf(", color-stop(%u%%, #%02x%02x%02x)",
-					g->colors[i].pos,
-					g->colors[i].r, g->colors[i].g, g->colors[i].b);
-			else
-				printf(", color-stop(%u%%, rgba(%i,%i,%i,%.3g))",
-					g->colors[i].pos,
-					g->colors[i].r, g->colors[i].g, g->colors[i].b,
-					decimal2ratio(g->colors[i].a));
-		}
-	}
-	else if(mode == YUI3) {
-		for(i=0; i<g->ncolors; i++) {
-			printf("\t\t\t{ color: \"");
-			if(g->colors[i].a == 255)
-				print_rgb(g->colors[i]);
-			else
-				print_rgba(g->colors[i]);
-			printf("\"");
-			if(g->colors[i].pos != -1)
-				printf(", offset: %0.2f", (float)g->colors[i].pos/100);
-			printf(" }");
-			if(i<g->ncolors-1)
-				printf(",");
-			printf("\n");
-		}
-	}
-	else {
-		if(g->colors[0].a == 255)
-			print_rgb(g->colors[0]);
-		else
-			print_rgba(g->colors[0]);
-		if(g->colors[0].pos != -1)
-			printf(" %u%%", g->colors[0].pos);
-		for(i=1; i<g->ncolors; i++) {
-			printf(", ");
-			if(g->colors[i].a == 255)
-				print_rgb(g->colors[i]);
-			else
-				print_rgba(g->colors[i]);
-			if(g->colors[i].pos != -1)
-				printf(" %u%%", g->colors[i].pos);
-		}
+			print_rgba(g->colors[i]);
+		if(g->colors[i].pos != -1)
+			printf(" %u%%", g->colors[i].pos);
 	}
 }
 
@@ -469,7 +423,7 @@ static void print_css_gradient(const char *fname, gradient g)
 	printf(".%s {\n", classname);
 
 	printf("\tbackground-image: linear-gradient(%s, ", w3points[g.start]);
-	print_colors(&g, CSS3);
+	print_colors(&g);
 	printf(");\n");
 
 	printf("}\n");
