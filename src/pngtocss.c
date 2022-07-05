@@ -314,6 +314,7 @@ static int calculate_gradient(const image *image, gradient *g)
 					if(tmp_ptr == NULL) {
 						fprintf(stderr, "pngtocss: out of memory calculating gradient: %lu bytes\n", (unsigned long)sizeof(rgba)*g->ncolors);
 						free(g->colors);
+						g->colors = NULL;
 						g->ncolors=0;
 						return 0;
 					}
@@ -354,6 +355,7 @@ static gradient read_png_gradient(const char *fname)
 {
 	image image;
 	gradient g;
+	g.colors = NULL;
 
 	image.file_name = fname;
 
@@ -440,7 +442,9 @@ static int process_file(const char *fname)
 
 	print_css_gradient(fname, g);
 
-	free(g.colors);
+	if(g.colors) {
+		free(g.colors);
+	}
 	g.colors=NULL;
 
 	return result;
