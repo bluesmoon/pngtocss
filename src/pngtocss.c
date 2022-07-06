@@ -374,23 +374,18 @@ static gradient read_png_gradient(const char *fname)
 	image.buffer = malloc(PNG_IMAGE_SIZE(image.image));
 	image.pixel_bytes = PNG_IMAGE_PIXEL_SIZE(image.image.format);
 
-	if (image.buffer == NULL) {
-		fprintf(stderr, "pngtocss: out of memory: %lu bytes\n", (unsigned long)PNG_IMAGE_SIZE(image.image));
-		return g;
+	if(image.buffer == NULL) {
+		fprintf(stderr, "pngtocss: out of memory: %lu bytes reading %s\n", (unsigned long)PNG_IMAGE_SIZE(image.image), fname);
 	}
-
-	if(!png_image_finish_read(&image.image, NULL /*background*/, image.buffer, (png_int_32)image.stride, image.colormap)) {
+	else if(!png_image_finish_read(&image.image, NULL /*background*/, image.buffer, (png_int_32)image.stride, image.colormap)) {
 		fprintf(stderr, "pngtocss: read %s: %s\n", fname, image.image.message);
-		png_image_free(&image.image);
-		return g;
 	}
-
-	if(!calculate_gradient(&image, &g)) {
-		png_image_free(&image.image);
-		return g;
+	else {
+		calculate_gradient(&image, &g);
 	}
 
 	png_image_free(&image.image);
+	free(image.buffer);
 	return g;
 }
 
